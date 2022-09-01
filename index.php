@@ -5,6 +5,20 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Smart Streetlight System</title>
+    
+    <style type="text/css" media="screen">
+    table
+    {
+    border-collapse: collapse;
+    border-spacing: 0px;
+    }
+    table, th, td
+    {
+    padding: 5px;
+    border: 1px solid black;
+    }
+    </style>
+    
     <link rel=¨stylesheet¨ type=¨text/css¨ href=¨Server_web.css¨>
     <link rel="stylesheet" href="style.css">
 </head>
@@ -25,7 +39,7 @@
     <p>
     <form method="post">
         <select id="sLight" name = "selected">
-            <option value = "selecting">Choose streetlight</option>
+            <option value = 0>General information</option>
             <?php
                 for($i = 1; $i <= $sl_count; $i++){
                     echo "<option value = $i>Light$i</option>";
@@ -52,9 +66,9 @@
     </figure>
 
     <?php
-        if (isset($_POST["selected"])){
+        if (isset($_POST["selected"]) && $_POST['selected'] != 0){
             $select_op = $_POST['selected'];
-            // echo "<p>$select_op</p>";
+            // echo "<p>$select_op</p>"; 
             $sql = "SELECT battery FROM streetlights WHERE id = $select_op;";
             $status = mysqli_query($db_link, $sql);
             $temp = mysqli_fetch_assoc($status);
@@ -150,6 +164,37 @@
                 </script>
             </div>
             <script src="selectList.js"></script>
+    <?php
+        }
+        else
+        {
+    ?>
+            <h2>General information</h2>
+            <table>
+                <tbody>
+                    <tr>
+                        <th>Streetlight</th>
+                        <th>Power flow status</th>
+                    </tr>
+                    <?php
+                        for($i = 1; $i <= $sl_count; $i++){
+                            echo "<tr><td>" . "Light $i" . "</td>";
+                            if ($i == 1)
+                            {
+                                echo "<td>" . "Own battery" . "</td></tr>";
+                            }
+                            else if ($i == 2)
+                            {
+                                echo "<td>" . "Power sharing : Supply" . "</td></tr>";
+                            }
+                            else if ($i == 3)
+                            {
+                                echo "<td>" . "Power sharing : Consume" . "</td></tr>";
+                            }
+                        }
+                    ?>
+                </tbody>
+            </table>
     <?php
         }
     ?>
