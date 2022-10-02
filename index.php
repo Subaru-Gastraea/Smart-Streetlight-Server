@@ -48,7 +48,7 @@
             while($row = mysqli_fetch_assoc($status) ){
                 //$t = array(($temp+2) => array("chrg" => $row["charge"], "trgt" => $row["chg_trgt"]));
                 //echo "{$row['id']}, {$row['priority']}"."\n";
-                array_push($chrg_status, array("SN" => $row["SN"], "chrg" => $row["charge"], "trgt" => $row["chg_trgt"]));  // array(key => value, key => value, ...)
+                array_push($chrg_status, array("SN" => $row["SN"], "GP" => $row["grp"], "chrg" => $row["charge"], "trgt" => $row["chg_trgt"]));  // array(key => value, key => value, ...)
             }
         }
     ?>
@@ -57,9 +57,27 @@
         <select id="sLight" name = "selected">
             <option value = 0>General information</option>
             <?php
-                for($i = 1; $i <= $sl_count; $i++){
-                    echo "<option value = $i>Light$i</option>";
+                // Make groups
+                $groups = array();
+                foreach ($chrg_status as $element) {
+                    $groups[$element['GP']][] = $element;
                 }
+
+                $SNgroups = array();    // Array of groups of SN numbers
+                foreach ($groups as $gpNum => $group){
+                    echo "<optgroup label = Group$gpNum>";
+                    $SNarr = array();
+                    foreach ($group as $STlight){
+                        echo "<option value = $STlight[SN]>Light$STlight[SN]</option>";
+                        $SNarr[] = $STlight["SN"];
+                    }
+                    $SNgroups[] = $SNarr;
+                    echo "</optgroup>";
+                }
+
+                // for($i = 1; $i <= $sl_count; $i++){
+                //     echo "<option value = $i>Light$i</option>";
+                // }
             ?>
             <!--
             <option>Light1</option>
@@ -88,6 +106,16 @@
         }
         // $sliderValue = $_COOKIE['slider_val'];
         // echo "<p>slider value: $sliderValue</p>";
+
+        if(isset($_POST["priority"])){
+            echo "Priority in PHP: ".$_POST["priority"];    // pass slider2 value from js to php
+            echo "<br>Select_op: ".$_POST["selected"];
+        }
+        
+        if(isset($_POST["nearLT"]) && isset($_POST["relativPos"])){
+            echo "Set position: ".$_POST["relativPos"] ." of streetlight" .$_POST["nearLT"];    // pass position value from js to php
+            echo "<br>Select_op: ".$_POST["selected"];
+        }
 
         if (isset($_POST["selected"]) && $_POST['selected'] != 0){
             $select_op = $_POST['selected'];
@@ -147,14 +175,22 @@
                         </form>
                         <label for="myRange">Brightness</label>
                         <!-- <p id="rangeValue">50</p> -->
+
+                        <form action="" method="POST">
+                            <input type="range" min="1" max="100" id="Priority" name="priority" />
+                            <input type="text" name="slider_PNum" id="slider_PNum" disabled />
+                            <input type=submit value=Submit />
+                            <input type="hidden" name="selected" value=<?php echo $select_op?> />   <!-- Repost the # of the streetlight -->
+                        </form>
+                        <label for="Priority">Priority</label>
                     </div>
                 </p>
                 <script>
+                    // Range slider
                     var slider = document.getElementById("myRange");
                     var output = document.getElementById("slider_P");
                     var localStorageSliderNumber;
                     
-                    // Range slider
                     if (window.localStorage.getItem('sliderValue'+<?php echo $select_op; ?>) != null) {
                         localStorageSliderNumber = window.localStorage.getItem('sliderValue'+<?php echo $select_op; ?>);
                     } else {
@@ -171,7 +207,50 @@
                         window.localStorage.setItem('sliderValue'+<?php echo $select_op; ?>, this.value);
                         // document.cookie = "slider_val=" + this.value;
                     });
+
+                    // Range slider2
+                    var slider2 = document.getElementById("Priority");
+                    var output2 = document.getElementById("slider_PNum");
+                    var localStorageSliderNumber2;
+
+                    if (window.localStorage.getItem('slider2Value'+<?php echo $select_op; ?>) != null) {
+                        localStorageSliderNumber2 = window.localStorage.getItem('slider2Value'+<?php echo $select_op; ?>);
+                    }
+                    slider2.value = localStorageSliderNumber2;
+                    output2.value = localStorageSliderNumber2;
+
+                    slider2.addEventListener('input', function() {
+                        output2.value = this.value;
+                        window.localStorage.setItem('slider2Value'+<?php echo $select_op; ?>, this.value);
+                    });
                 </script>
+
+                <form action="" method="POST">
+                    <div id = "Position" style="display:block;">    <!-- Make two selection lists side-by-side -->
+                        <select id = "sNearLight" name = "nearLT">
+                            <?php
+                                foreach ($SNgroups as $SNgrp){
+                                    if (in_array($select_op, $SNgrp)){
+                                        foreach ($SNgrp as $SN){
+                                            if ($SN !== $select_op){
+                                                echo "<option value = $SN>Light$SN</option>";
+                                            }
+                                        }
+                                    }
+                                }
+                            ?>
+                        </select>
+                        <select id = "sPosition" name = "relativPos">
+                            <option value = N>North</option>
+                            <option value = E>East</option>
+                            <option value = S>South</option>
+                            <option value = W>West</option>
+                        </select>
+                        <input type="hidden" name="selected" value=<?php echo $select_op?> />   <!-- Repost the # of the streetlight -->
+                        <input type=submit value=Submit />
+                    </div>
+                </form>
+                <label for="Position">Position</label>
 
                 <div class="battery-outer"> 
                     <div class="battery-level"></div>
