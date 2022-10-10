@@ -48,6 +48,7 @@
             while($row = mysqli_fetch_assoc($status) ){
                 //$t = array(($temp+2) => array("chrg" => $row["charge"], "trgt" => $row["chg_trgt"]));
                 //echo "{$row['id']}, {$row['priority']}"."\n";
+                //$chrg_status[$row["SN"]] = array("SN" => $row["SN"], "GP" => $row["grp"], "chrg" => $row["charge"], "trgt" => $row["chg_trgt"]);
                 array_push($chrg_status, array("SN" => $row["SN"], "GP" => $row["grp"], "chrg" => $row["charge"], "trgt" => $row["chg_trgt"]));  // array(key => value, key => value, ...)
             }
         }
@@ -101,20 +102,29 @@
 
     <?php
         if(isset($_POST["brightness"])){
-            echo "Brightness in PHP: ".$_POST["brightness"];    // pass slider value from js to php
-            echo "<br>Select_op: ".$_POST["selected"];
+            //echo "Brightness in PHP: ".$_POST["brightness"];    // pass slider value from js to php
+            //echo "<br>Select_op: ".$_POST["selected"];
+            $select_op = (int)$_POST["selected"]; //this line would be sufficient, the twos above is not necessary
+            $sql = "UPDATE streetlights SET luminance = ".$_POST['brightness']." where SN = $select_op;";
+            mysqli_query($db_link, $sql);
         }
         // $sliderValue = $_COOKIE['slider_val'];
         // echo "<p>slider value: $sliderValue</p>";
 
         if(isset($_POST["priority"])){
-            echo "Priority in PHP: ".$_POST["priority"];    // pass slider2 value from js to php
-            echo "<br>Select_op: ".$_POST["selected"];
+            //echo "Priority in PHP: ".$_POST["priority"];    // pass slider2 value from js to php
+            //echo "<br>Select_op: ".$_POST["selected"];
+            $select_op = (int)$_POST["selected"]; //this line would be sufficient, the twos above is not necessary
+            $sql = "UPDATE streetlights SET priority = ".$_POST['priority']." where SN = $select_op;";
+            mysqli_query($db_link, $sql);
         }
         
         if(isset($_POST["nearLT"]) && isset($_POST["relativPos"])){
-            echo "Set position: ".$_POST["relativPos"] ." of streetlight" .$_POST["nearLT"];    // pass position value from js to php
-            echo "<br>Select_op: ".$_POST["selected"];
+            //echo "Set position: ".$_POST["relativPos"] ." of streetlight" .$_POST["nearLT"];    // pass position value from js to php
+            //echo "<br>Select_op: ".$_POST["selected"];
+            $select_op = (int)$_POST["selected"]; //this line would be sufficient, the twos above is not necessary
+            $sql = "UPDATE streetlights SET ".$_POST["relativPos"]." = ".$_POST["nearLT"]." where SN = $select_op;";
+            mysqli_query($db_link, $sql);
         }
 
         if (isset($_POST["selected"]) && $_POST['selected'] != 0){
@@ -145,7 +155,7 @@
             if(mysqli_num_rows($status) > 0){
                 while($row = mysqli_fetch_assoc($status) ){
                     $temp = explode(":", $row['time'], 2);  // "??:??" => "??","??"
-                    $temp = $temp[0];   // o'clock
+                    $temp = intval($temp[0]);   // o'clock
                     //echo $temp."\n";
                     if($temp < 25){ //in case time format error
                         $bat_arr[$temp]["amount"]++;    // # of data in the hour
@@ -159,6 +169,7 @@
                     }
                     $temp++;
                 }
+               // echo var_dump($bat_arr);
             }
             
             //echo "<p>$bat_arr[1]</p>";
@@ -327,9 +338,15 @@
                         <th>Power flow status</th>
                     </tr>
                     <?php
-                        for($i = 1; $i <= $sl_count; $i++){
-                            echo "<tr><td>" . "Light $i" . "</td>";
-                            if ($i == 1)
+                        for($i = 0; $i < $sl_count; $i++){
+                            echo "<tr><td>" . "Light ".$chrg_status[$i]['SN'] . "</td>";
+                            if(!$chrg_status[$i]["chrg"])
+                                echo "<td>" . "Own battery" . "</td></tr>";
+                            elseif ($chrg_status[$i]["chrg"] == 1) 
+                                echo "<td>" . "Power sharing : Consume Streetlight ". $chrg_status[$i]['trgt'] . "</td></tr>";
+                            else
+                                echo "<td>" . "Power sharing : Supply Streetlight ". $chrg_status[$i]['trgt'] . "</td></tr>";
+                            /*if ($i == 1)
                             {
                                 echo "<td>" . "Own battery" . "</td></tr>";
                             }
@@ -340,7 +357,7 @@
                             else if ($i == 3)
                             {
                                 echo "<td>" . "Power sharing : Consume" . "</td></tr>";
-                            }
+                            }*/
                         }
                     ?>
                 </tbody>
