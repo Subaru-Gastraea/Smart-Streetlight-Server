@@ -105,7 +105,9 @@
             //echo "Brightness in PHP: ".$_POST["brightness"];    // pass slider value from js to php
             //echo "<br>Select_op: ".$_POST["selected"];
             $select_op = (int)$_POST["selected"]; //this line would be sufficient, the twos above is not necessary
-            $sql = "UPDATE streetlights SET luminance = ".$_POST['brightness']." where SN = $select_op;";
+            $brightRemap = $_POST["brightness"] / 100;  // Remap brightness from 0~100 to 0~1
+            $Mode = ($_POST['mode'] == 'Auto') ? -3 : $brightRemap;
+            $sql = "UPDATE streetlights SET luminance = ".$brightRemap.", user_lumi = ".$Mode." where SN = $select_op;";
             mysqli_query($db_link, $sql);
         }
         // $sliderValue = $_COOKIE['slider_val'];
@@ -115,26 +117,78 @@
             //echo "Priority in PHP: ".$_POST["priority"];    // pass slider2 value from js to php
             //echo "<br>Select_op: ".$_POST["selected"];
             $select_op = (int)$_POST["selected"]; //this line would be sufficient, the twos above is not necessary
-            $sql = "UPDATE streetlights SET priority = ".$_POST['priority']." where SN = $select_op;";
+            $priorRemap = $_POST['priority'] + 50;  // Remap priority from 0~100 to 50~150
+            $sql = "UPDATE streetlights SET priority = ".$priorRemap.", user_pri = ".$priorRemap." where SN = $select_op;";
             mysqli_query($db_link, $sql);
         }
         
         if(isset($_POST["nearLT"]) && isset($_POST["relativPos"])){
             //echo "Set position: ".$_POST["relativPos"] ." of streetlight" .$_POST["nearLT"];    // pass position value from js to php
             //echo "<br>Select_op: ".$_POST["selected"];
+            $cvt = array('N' => 'S', 'S' => 'N', 'W' => 'E', 'E' => 'W'); //direction conversion
             $select_op = (int)$_POST["selected"]; //this line would be sufficient, the twos above is not necessary
+            $sql = "SELECT N, S, W, E FROM streetlights WHERE SN = $select_op;";
+            $status = mysqli_query($db_link, $sql);
+            $row = mysqli_fetch_assoc($status);
+
+            // Find and delete the old position of the near streetlight to be set (if exists)
+            if($row['N'] == $_POST['nearLT'])
+                $dir = 'N';
+            elseif($row['S'] == $_POST['nearLT'])
+                $dir = 'S';
+            elseif($row['W'] == $_POST['nearLT'])
+                $dir = 'W';
+            elseif($row['E'] == $_POST['nearLT'])
+                $dir = 'E';
+            if(isset($dir)){
+                $sql = "UPDATE streetlights SET ".$dir." = 0 where SN = $select_op;";
+                mysqli_query($db_link, $sql);
+            }
+
+            // Set new position of the near streetlight
             $sql = "UPDATE streetlights SET ".$_POST["relativPos"]." = ".$_POST["nearLT"]." where SN = $select_op;";
+            mysqli_query($db_link, $sql);
+
+            //set new information of corresponding streetlight
+            $sql = "SELECT N, S, W, E FROM streetlights WHERE SN = ".$_POST["nearLT"].";";
+            $status = mysqli_query($db_link, $sql);
+            $row = mysqli_fetch_assoc($status);
+            if($row['N'] == $select_op)
+                $dir = 'N';
+            elseif($row['S'] == $select_op)
+                $dir = 'S';
+            elseif($row['W'] == $select_op)
+                $dir = 'W';
+            elseif($row['E'] == $select_op)
+                $dir = 'E';
+            if(isset($dir)){
+                $sql = "UPDATE streetlights SET ".$dir." = 0 where SN = ".$_POST["nearLT"].";";
+                mysqli_query($db_link, $sql);
+            }
+            $sql = "UPDATE streetlights SET ".$cvt[$_POST["relativPos"]]." = ".$select_op." where SN = ".$_POST["nearLT"].";";
+            mysqli_query($db_link, $sql);
+            
+            $temp = "";
+            $sql = "SELECT N,S,W,E from streetlights WHERE SN = $select_op;";
+            $status = mysqli_query($db_link, $sql);
+            $row = mysqli_fetch_assoc($status);
+            $temp = $temp.strval($row['N']).strval($row['S']).strval($row['W']).strval($row['E']);
+            //echo $temp;
+            $sql = "UPDATE streetlights SET user_loc = '$temp' WHERE SN = $select_op;";
             mysqli_query($db_link, $sql);
         }
 
         if (isset($_POST["selected"]) && $_POST['selected'] != 0){
             $select_op = $_POST['selected'];
-            // echo "<p>$select_op</p>"; 
+            echo "<h2>Streetlight $select_op</h2>"; 
             $sql = "SELECT * FROM streetlights WHERE SN = $select_op;";
             $status = mysqli_query($db_link, $sql);
             $temp = mysqli_fetch_assoc($status);
             $bat = (int)$temp["battery"];
             $chrg = (int)$temp["charge"]; //0 means using own power, 1 means using others' power
+            $bright = $temp["luminance"];
+            $priority = $temp["priority"];
+            $posStr = strval($temp['N']).strval($temp['S']).strval($temp['W']).strval($temp['E']);
             // echo "<p>$bat</p>";
             if($chrg != 0){
                 $trgt = (int)$temp["chg_trgt"];//trgt represents the power source
@@ -179,16 +233,17 @@
                     <div class="slidecontainer">
                         <!-- <input type="range" min="0" max="100" value="50" class="slider" id="myRange"> -->
                         <form action="" method="POST">
-                            <input type="range" min="0" max="100" id="myRange" name="brightness" />
+                            <input type="range" min="0" max="100" id="myRange" name="brightness" value="0" />
                             <input type="text" name="slider_P" id="slider_P" disabled />
-                            <input type=submit value=Submit />
+                            <input type="submit" name="mode" value="Manual" />
+                            <input type="submit" name="mode" value="Auto" />
                             <input type="hidden" name="selected" value=<?php echo $select_op?> />   <!-- Repost the # of the streetlight -->
                         </form>
                         <label for="myRange">Brightness</label>
                         <!-- <p id="rangeValue">50</p> -->
 
                         <form action="" method="POST">
-                            <input type="range" min="1" max="100" id="Priority" name="priority" />
+                            <input type="range" min="0" max="100" id="Priority" name="priority" value="0" />
                             <input type="text" name="slider_PNum" id="slider_PNum" disabled />
                             <input type=submit value=Submit />
                             <input type="hidden" name="selected" value=<?php echo $select_op?> />   <!-- Repost the # of the streetlight -->
@@ -200,39 +255,66 @@
                     // Range slider
                     var slider = document.getElementById("myRange");
                     var output = document.getElementById("slider_P");
-                    var localStorageSliderNumber;
+                    var brightness;
                     
-                    if (window.localStorage.getItem('sliderValue'+<?php echo $select_op; ?>) != null) {
-                        localStorageSliderNumber = window.localStorage.getItem('sliderValue'+<?php echo $select_op; ?>);
-                    } else {
-                        window.localStorage.setItem('sliderValue'+<?php echo $select_op; ?>, '50');
-                        localStorageSliderNumber = 50;
+                    // if (window.localStorage.getItem('sliderValue'+<?php echo $select_op; ?>) != null) {
+                    //     localStorageSliderNumber = window.localStorage.getItem('sliderValue'+<?php echo $select_op; ?>);
+                    // } else {
+                    //     window.localStorage.setItem('sliderValue'+<?php echo $select_op; ?>, '50');
+                    //     localStorageSliderNumber = 50;
+                    // }
+                    <?php
+                    if (isset($bright)){
+                    ?>
+                        brightness = <?php echo $bright; ?> * 100;
+                        slider.value = brightness;
+                        output.value = brightness + "%";
+                    <?php
                     }
-                    slider.value = localStorageSliderNumber;
-                    output.value = localStorageSliderNumber + "%";
+                    else{
+                    ?>
+                        slider.value = 0;
+                        output.value = "Not set";
+                    <?php
+                    }
+                    ?>
+                    
                     // document.cookie = "slider_val=" + localStorageSliderNumber;
 
                     slider.addEventListener('input', function() {
                         // output.innerHTML = this.value + "%";
                         output.value = this.value + "%";
-                        window.localStorage.setItem('sliderValue'+<?php echo $select_op; ?>, this.value);
+                        // window.localStorage.setItem('sliderValue'+<?php echo $select_op; ?>, this.value);
                         // document.cookie = "slider_val=" + this.value;
                     });
 
                     // Range slider2
                     var slider2 = document.getElementById("Priority");
                     var output2 = document.getElementById("slider_PNum");
-                    var localStorageSliderNumber2;
+                    var priNum;
 
-                    if (window.localStorage.getItem('slider2Value'+<?php echo $select_op; ?>) != null) {
-                        localStorageSliderNumber2 = window.localStorage.getItem('slider2Value'+<?php echo $select_op; ?>);
+                    // if (window.localStorage.getItem('slider2Value'+<?php echo $select_op; ?>) != null) {
+                    //     localStorageSliderNumber2 = window.localStorage.getItem('slider2Value'+<?php echo $select_op; ?>);
+                    // }
+                    <?php
+                    if (isset($priority)){
+                    ?>
+                        priNum = <?php echo $priority; ?> - 50; // Remap priority from 50~150 to 0~100
+                        slider2.value = priNum;
+                        output2.value = priNum;
+                    <?php
                     }
-                    slider2.value = localStorageSliderNumber2;
-                    output2.value = localStorageSliderNumber2;
+                    else{
+                    ?>
+                        slider2.value = 0;
+                        output2.value = "Not set";
+                    <?php
+                    }
+                    ?>
 
                     slider2.addEventListener('input', function() {
                         output2.value = this.value;
-                        window.localStorage.setItem('slider2Value'+<?php echo $select_op; ?>, this.value);
+                        // window.localStorage.setItem('slider2Value'+<?php echo $select_op; ?>, this.value);
                     });
                 </script>
 
@@ -258,10 +340,39 @@
                             <option value = W>West</option>
                         </select>
                         <input type="hidden" name="selected" value=<?php echo $select_op?> />   <!-- Repost the # of the streetlight -->
+                        <input type="text" name="pos_Describe" id="pos_Describe" disabled />
                         <input type=submit value=Submit />
                     </div>
                 </form>
                 <label for="Position">Position</label>
+
+                <script>
+                    // Position description
+                    var posText = document.getElementById("pos_Describe");
+                    var posInfo;
+                    
+                    <?php
+                    $posArr = "NSWE";
+
+                    if (isset($posStr)){
+                    ?>
+                        posInfo = '';
+                    <?php
+                        $strL = strlen($posArr);
+                        for($i = 0; $i < $strL; $i++){
+                    ?>
+                            posInfo += "<?php echo "$posArr[$i]:$posStr[$i] " ?>";
+                    <?php
+                        }
+                    }
+                    else{
+                    ?>
+                        posInfo = "N:0 S:0 W:0 E:0";
+                    <?php
+                    }
+                    ?>
+                    posText.value = posInfo;
+                </script>
 
                 <div class="battery-outer"> 
                     <div class="battery-level"></div>
