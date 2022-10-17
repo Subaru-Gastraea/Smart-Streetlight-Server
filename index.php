@@ -21,6 +21,7 @@
     
     <link rel=¨stylesheet¨ type=¨text/css¨ href=¨Server_web.css¨>
     <link rel="stylesheet" href="style.css">
+    <script src="https://kit.fontawesome.com/d6caedf4ee.js" crossorigin="anonymous"></script>
 </head>
 <?php
     $db_link = mysqli_connect('localhost', 'root', 'mysqltest12345', 'db') or die(mysqli_error());
@@ -93,13 +94,6 @@
         <input type="submit" name="submit" id="submitBtn">
     </form>
 
-    <h1>Smart Streetlight Control System</h1>
-    <figure>
-        <img src="pics/smart_solar_lights_PR.jpg"
-        width="400"
-        height="341">
-    </figure>
-
     <?php
         if(isset($_POST["brightness"])){
             //echo "Brightness in PHP: ".$_POST["brightness"];    // pass slider value from js to php
@@ -118,7 +112,8 @@
             //echo "<br>Select_op: ".$_POST["selected"];
             $select_op = (int)$_POST["selected"]; //this line would be sufficient, the twos above is not necessary
             $priorRemap = $_POST['priority'] + 50;  // Remap priority from 0~100 to 50~150
-            $sql = "UPDATE streetlights SET priority = ".$priorRemap.", user_pri = ".$priorRemap." where SN = $select_op;";
+            $priorMode = ($_POST['Prior_mode'] == 'Auto') ? -3 : $priorRemap;
+            $sql = "UPDATE streetlights SET priority = ".$priorRemap.", user_pri = ".$priorMode." where SN = $select_op;";
             mysqli_query($db_link, $sql);
         }
         
@@ -178,17 +173,56 @@
             mysqli_query($db_link, $sql);
         }
 
+        if(isset($_POST["powFlowStatus"])){
+            $select_op = (int)$_POST["selected"];
+            
+            $sql = "SELECT charge, chg_trgt FROM streetlights WHERE SN = $select_op;";
+            $status = mysqli_query($db_link, $sql);
+            $row = mysqli_fetch_assoc($status);
+
+            if (isset($_POST["powShareLT"])){
+                // Set new power flow status (Consume or Supply)
+                $sql = "UPDATE streetlights SET charge = ".$_POST['powFlowStatus']." where SN = $select_op;";
+                mysqli_query($db_link, $sql);
+
+                // Set new power sharing light
+                $sql = "UPDATE streetlights SET chg_trgt = ".$_POST["powShareLT"]." where SN = $select_op;";
+                mysqli_query($db_link, $sql);
+
+                $powFlowCvt = ($_POST['powFlowStatus'] == 1) ? 2 : 1;
+
+                // Set new power flow status (Consume or Supply) of corresponding streetlight
+                $sql = "UPDATE streetlights SET charge = $powFlowCvt where SN = ".$_POST['powShareLT'];
+                mysqli_query($db_link, $sql);
+
+                // Set new power sharing light of corresponding streetlight
+                $sql = "UPDATE streetlights SET chg_trgt = $select_op where SN = ".$_POST['powShareLT'];
+                mysqli_query($db_link, $sql);
+            }
+            elseif ($row['charge'] !== 0){
+                // Set new power flow status (Own battery)
+                $sql = "UPDATE streetlights SET charge = 0 where SN = $select_op;";
+                mysqli_query($db_link, $sql);
+
+                // Set new power flow status (Own battery) of corresponding streetlight
+                $sql = "UPDATE streetlights SET charge = 0 where SN = ".$row['chg_trgt'];
+                mysqli_query($db_link, $sql);
+            }
+
+        }
+
         if (isset($_POST["selected"]) && $_POST['selected'] != 0){
             $select_op = $_POST['selected'];
-            echo "<h2>Streetlight $select_op</h2>"; 
+            echo "<br><i class='fa-solid fa-plant-wilt'></i><h2 style = 'display: inline'> Streetlight $select_op</h2>";
             $sql = "SELECT * FROM streetlights WHERE SN = $select_op;";
             $status = mysqli_query($db_link, $sql);
             $temp = mysqli_fetch_assoc($status);
             $bat = (int)$temp["battery"];
-            $chrg = (int)$temp["charge"]; //0 means using own power, 1 means using others' power
+            $chrg = (int)$temp["charge"]; //0 means using own power, 1 means consuming power, 2 means supplying power
             $bright = $temp["luminance"];
             $priority = $temp["priority"];
             $posStr = strval($temp['N']).strval($temp['S']).strval($temp['W']).strval($temp['E']);
+            $env_lumi_pcnt = $temp["env_lumi"] / 10;    // Remap from 0~1000 to 0~100(%)
             // echo "<p>$bat</p>";
             if($chrg != 0){
                 $trgt = (int)$temp["chg_trgt"];//trgt represents the power source
@@ -232,23 +266,31 @@
                 <p>
                     <div class="slidecontainer">
                         <!-- <input type="range" min="0" max="100" value="50" class="slider" id="myRange"> -->
+                        <br>
+                        <!-- Brightness -->
+                        <i class="fa-regular fa-lightbulb"></i>
+                        <label for="myRange">Brightness</label>
                         <form action="" method="POST">
                             <input type="range" min="0" max="100" id="myRange" name="brightness" value="0" />
-                            <input type="text" name="slider_P" id="slider_P" disabled />
+                            <input type="text" name="slider_P" id="slider_P" size="5" disabled />
                             <input type="submit" name="mode" value="Manual" />
                             <input type="submit" name="mode" value="Auto" />
                             <input type="hidden" name="selected" value=<?php echo $select_op?> />   <!-- Repost the # of the streetlight -->
                         </form>
-                        <label for="myRange">Brightness</label>
                         <!-- <p id="rangeValue">50</p> -->
+                        <br>
 
+                        <!-- Priority -->
+                        <i class="fa-solid fa-ranking-star"></i>
+                        <label for="Priority">Priority</label>
                         <form action="" method="POST">
                             <input type="range" min="0" max="100" id="Priority" name="priority" value="0" />
-                            <input type="text" name="slider_PNum" id="slider_PNum" disabled />
-                            <input type=submit value=Submit />
+                            <input type="text" name="slider_PNum" id="slider_PNum" size="5" disabled />
+                            <input type="submit" name="Prior_mode" value="Manual" />
+                            <input type="submit" name="Prior_mode" value="Auto" />
                             <input type="hidden" name="selected" value=<?php echo $select_op?> />   <!-- Repost the # of the streetlight -->
                         </form>
-                        <label for="Priority">Priority</label>
+                        <br>
                     </div>
                 </p>
                 <script>
@@ -318,9 +360,38 @@
                     });
                 </script>
 
+                <!-- Ambient light illumination -->
+                <i class="fa-solid fa-sun"></i>
+                <label for="env_pcnt"> Ambient light illumination</label>
+                <br>
+                <input type="text" name="env_pcnt" id="env_pcnt" size="5" disabled />
+
+                <script>
+                    // Range slider
+                    var illumiText = document.getElementById("env_pcnt");
+
+                    <?php
+                    if (isset($env_lumi_pcnt)){
+                    ?>
+                        illumiText.value = <?php echo $env_lumi_pcnt; ?> + "%";
+                    <?php
+                    }
+                    else{
+                    ?>
+                        illumiText.value = "Not set";
+                    <?php
+                    }
+                    ?>
+                </script>
+
+                <!-- Position -->
+                <br><br>
+                <i class="fa-solid fa-map-location-dot"></i>
+                <label for="Position">Position</label>
                 <form action="" method="POST">
                     <div id = "Position" style="display:block;">    <!-- Make two selection lists side-by-side -->
                         <select id = "sNearLight" name = "nearLT">
+                            <option value = "0">0</option>
                             <?php
                                 foreach ($SNgroups as $SNgrp){
                                     if (in_array($select_op, $SNgrp)){
@@ -344,7 +415,7 @@
                         <input type=submit value=Submit />
                     </div>
                 </form>
-                <label for="Position">Position</label>
+                <br>
 
                 <script>
                     // Position description
@@ -374,6 +445,83 @@
                     posText.value = posInfo;
                 </script>
 
+                <!-- Power flow -->
+                <i class="fa-solid fa-plug-circle-bolt"></i>
+                <label for="PowerFlow">Power flow</label>
+                <form action="" method="POST">
+                    <div id = "PowerFlow" style="display:block;">    <!-- Make two selection lists side-by-side -->
+                        <select id = "sPowerFlow" name = "powFlowStatus" onchange="opDisableFunc()">
+                            <option value = 0>Own battery</option>
+                            <option value = 1>Consume</option>    
+                            <option value = 2>Supply</option>
+                        </select>
+                        <select id = "sPowShareLT" name = "powShareLT" disabled>
+                            <?php
+                                foreach ($SNgroups as $SNgrp){
+                                    if (in_array($select_op, $SNgrp)){
+                                        foreach ($SNgrp as $SN){
+                                            if ($SN !== $select_op){
+                                                echo "<option value = $SN>Light$SN</option>";
+                                            }
+                                        }
+                                    }
+                                }
+                            ?>
+                        </select>
+                        <input type="hidden" name="selected" value=<?php echo $select_op?> />   <!-- Repost the # of the streetlight -->
+                        <input type="text" name="powFlow_Describe" id="powFlow_Describe" size="40" disabled />
+                        <input type=submit value=Submit />
+                    </div>
+                </form>
+                <br>
+
+                <script>
+                    // Disable power sharing select list if user choose to use own battery
+                    function opDisableFunc() {
+                        if (document.getElementById("sPowerFlow").value == 0)
+                            document.getElementById("sPowShareLT").disabled = true;
+                        else
+                            document.getElementById("sPowShareLT").disabled = false;
+                    }
+
+                    // Power flow status description $chrg $trgt
+                    var powFlowText = document.getElementById("powFlow_Describe");
+                    var powFlowInfo;
+                    
+                    <?php
+                    if (isset($chrg)){
+                        if ($chrg == 0){
+                    ?>
+                            powFlowInfo = "Using own battery";
+                    <?php
+                        }
+                        elseif (isset($trgt)){
+                            if ($chrg == 1){
+                    ?>
+                                powFlowInfo = "Power sharing : Consume Streetlight <?php echo $trgt ?>";
+                    <?php
+                            }
+                            elseif ($chrg == 2){
+                    ?>
+                                powFlowInfo = "Power sharing : Supply Streetlight <?php echo $trgt ?>";
+                    <?php
+                            }
+                        }
+                        else{
+                    ?>
+                            posInfo = "Not set";
+                    <?php
+                        }
+                    }
+                    else{
+                    ?>
+                        posInfo = "Not set";
+                    <?php
+                    }
+                    ?>
+                    powFlowText.value = powFlowInfo;
+                </script>
+
                 <div class="battery-outer"> 
                     <div class="battery-level"></div>
                 </div>
@@ -387,6 +535,8 @@
                     batteryLevel.style.width = batStatus;
                     batteryLevel.innerHTML = batStatus;
                 </script>
+
+                <br>
             
                 <canvas id="myChart" style="width:100%;max-width:700px"></canvas>
                 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -441,6 +591,13 @@
         else
         {
     ?>
+            <h1>Smart Streetlight Control System</h1>
+            <figure>
+                <img src="pics/smart_solar_lights_PR.jpg"
+                width="400"
+                height="341">
+            </figure>
+
             <h2>General information</h2>
             <table>
                 <tbody>
